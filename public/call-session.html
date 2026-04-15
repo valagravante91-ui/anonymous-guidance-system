@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Session - Guidance Counseling</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+
+<body>
+    <header>
+        <div class="container">
+            <nav>
+                <div class="logo">🎓 Guidance Counseling</div>
+                <ul>
+                    <li><a href="student-dashboard.html">Back to Dashboard</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="call-container">
+            <div class="card">
+                <div class="card-header">
+                    Audio Call Session
+                    <span id="connectionStatus" style="float: right; font-size: 0.8em; color: #ffeb3b;">Connecting...</span>
+                </div>
+
+                <div id="alert" class="alert hidden" style="margin-bottom: 20px;"></div>
+
+                <div style="margin-top: 20px;">
+                    <h3>Session Information</h3>
+                    <p><strong>Counselor:</strong> <span id="counselorName">Loading...</span></p>
+                    <p><strong>Session Time:</strong> <span id="sessionTime">Loading...</span></p>
+                    <p><strong>Your Nickname:</strong> <span id="studentNickname">Loading...</span></p>
+                </div>
+
+                <div class="video-container" style="margin-top: 20px;">
+                    <div>
+                        <h3>🎤 Audio Call</h3>
+                        <p id="callStatus">Waiting for the counselor to start the call...</p>
+                        <audio id="remoteAudio" autoplay></audio>
+                    </div>
+                </div>
+
+                <div class="call-controls" style="margin-top: 20px;">
+                    <button id="acceptCallBtn" class="btn btn-success" onclick="acceptCall()" disabled
+                        style="opacity: 0.5; cursor: not-allowed;">Accept Call</button>
+                    <button id="endCallBtn" class="btn btn-danger hidden" onclick="endCall()">End Call</button>
+                    <button id="muteBtn" class="btn btn-secondary hidden" onclick="toggleMute()">Mute
+                        Microphone</button>
+                </div>
+
+                <div style="margin-top: 20px; padding: 15px; background-color: #f0f8ff; border-radius: 4px;">
+                    <h4>How to Use</h4>
+                    <ol style="padding-left: 20px;">
+                        <li>Click "Accept Call" to begin the audio session</li>
+                        <li>Allow browser access to your microphone when prompted</li>
+                        <li>You can mute/unmute your microphone during the call</li>
+                        <li>Click "End Call" when you're done</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer style="text-align: center;">
+        <p>&copy; 2026 Anonymous Guidance Counseling System. All rights reserved.</p>
+    </footer>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="js/config.js"></script>
+    <script>
+        const API_URL = window.APP_CONFIG.API_URL;
+        const token = localStorage.getItem('token');
+        const nickname = localStorage.getItem('nickname');
+        const urlParams = new URLSearchParams(window.location.search);
+        const bookingId = urlParams.get('bookingId');
+
+        let localStream;
+        let peerConnection;
+        let socket;
+        let isMuted = false;
+        let pendingOffer = null;
+        let iceCandidatesBuffer = [];
+
+        if (!token) {
+            window.location.href = 'student-login.html';
+        }
+
+        document.getElementById('studentNickname').textContent = nickname;
+
+        // Initialize Socket.io
+        socket = io(window.APP_CONFIG.SOCKET_URL);
+
+        socket.on('connect', () => {
+            console.log('[Socket] Connected to server');
+            document.getElementById('connectionStatus').textContent = 'Socket Connected';
+            document.getElementById('connectionStatus').style.color = '#4caf50';
+            
+            // Join the specific room for this booking
+            console.log('[Signaling] Joining room:', bookingId);
+            socket.emit('joinRoom', { roomId: bookingId, userId: nickname });
+        });
+
+        socket.on('roomJoined', (data) => {
+            console.log('[Signaling] Room joined successfully:', data.roomId);
+            document.getElementById('connectionStatus').textContent = 'Signal Ready';
+            // Notify the counselor that we are here and ready
+            socket.emit('student-ready', bookingId);
+        });
+
+        socket.on('disconnect', () => {
+            console.log('[Socket] Disconnected from server');
+            document.getElementById('connectionStatus').textContent = 'Signal Offline';
+            document.getElementById('connectionStatus').style.color = '#f44336';
+        });
+
+        async function loadBookingDetails() {
+            try {
+                const response = await fetch(`${API_URL}/bookings/${bookingId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const booking = await response.json();
+                document.getElementById('counselorName').textContent = booking.counselorId.name;
+
+                const date = new Date(booking.bookingDate).toLocaleDateString();
+                document.getElementById('sessionTime').textContent = `${date} ${booking.startTime}`;
+            } catch (error) {
+                showAlert('Error loading booking details: ' + error.message, 'error');
+            }
+        }
+
+        async function acceptCall() {
+            if (!pendingOffer) {
+                showAlert('Counselor has not started the call yet.', 'error');
+                return;
+            }
+            try {
+                // Request microphone access
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // Create peer connection
+                peerConnection = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: ['stun:stun.l.google.com:19302'] }
+                    ]
+                });
+
+                // Add local stream
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Handle remote stream
+                peerConnection.ontrack = (event) => {
+                    document.getElementById('remoteAudio').srcObject = event.streams[0];
+                };
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        socket.emit('ice-candidate', {
+                            target: bookingId,
+                            candidate: event.candidate
+                        });
+                    }
+                };
+
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(pendingOffer));
+
+                // Add any buffered ICE candidates received before the offer was accepted
+                while (iceCandidatesBuffer.length > 0) {
+                    const candidate = iceCandidatesBuffer.shift();
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                socket.emit('answer', {
+                    target: bookingId,
+                    answer: answer
+                });
+
+                // Update UI
+                document.getElementById('acceptCallBtn').classList.add('hidden');
+                document.getElementById('endCallBtn').classList.remove('hidden');
+                document.getElementById('muteBtn').classList.remove('hidden');
+                document.getElementById('callStatus').textContent = 'Call in progress...';
+
+                showAlert('Call accepted and connected.', 'success');
+            } catch (error) {
+                showAlert('Error accepting call: ' + error.message, 'error');
+            }
+        }
+
+        function endCall() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (peerConnection) {
+                peerConnection.close();
+            }
+
+            document.getElementById('acceptCallBtn').classList.remove('hidden');
+            document.getElementById('endCallBtn').classList.add('hidden');
+            document.getElementById('muteBtn').classList.add('hidden');
+            document.getElementById('callStatus').textContent = 'Call ended';
+
+            showAlert('Call ended', 'success');
+
+            // To allow restarting, we reset pendingOffer here so we wait again
+            pendingOffer = null;
+            iceCandidatesBuffer = [];
+            document.getElementById('acceptCallBtn').disabled = true;
+            document.getElementById('acceptCallBtn').style.opacity = '0.5';
+            document.getElementById('acceptCallBtn').style.cursor = 'not-allowed';
+            document.getElementById('callStatus').textContent = 'Waiting for the counselor to start the call...';
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            localStream.getAudioTracks().forEach(track => {
+                track.enabled = !isMuted;
+            });
+
+            const btn = document.getElementById('muteBtn');
+            btn.textContent = isMuted ? 'Unmute Microphone' : 'Mute Microphone';
+        }
+
+        // Socket.io event handlers
+        socket.on('offer', (payload) => {
+            console.log('[Signaling] Received offer from counselor');
+            pendingOffer = payload.offer;
+            const acceptBtn = document.getElementById('acceptCallBtn');
+            acceptBtn.disabled = false;
+            acceptBtn.style.opacity = '1';
+            acceptBtn.style.cursor = 'pointer';
+            document.getElementById('callStatus').textContent = 'Counselor has started the call. Please accept.';
+            showAlert('Counselor has started the call. You can now accept it.', 'info');
+        });
+
+        socket.on('ice-candidate', (incoming) => {
+            if (peerConnection && peerConnection.remoteDescription) {
+                peerConnection.addIceCandidate(new RTCIceCandidate(incoming.candidate));
+            } else {
+                iceCandidatesBuffer.push(incoming.candidate);
+            }
+        });
+
+        socket.on('user-disconnected', (userId) => {
+            showAlert('Counselor has disconnected', 'info');
+            endCall();
+        });
+
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('alert');
+            alertDiv.textContent = message;
+            alertDiv.className = `alert alert-${type}`;
+        }
+
+        // Load booking details on page load
+        loadBookingDetails();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Counselor Login - Guidance Counseling</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <nav>
+                <div class="logo">🎓 Guidance Counseling</div>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="student-login.html">Student Login</a></li>
+                    <li><a href="counselor-login.html">Counselor Login</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div style="max-width: 500px; margin: 40px auto;">
+            <div class="card">
+                <div class="card-header">Counselor Login</div>
+                
+                <div id="alert" class="alert hidden" style="margin-bottom: 20px;"></div>
+
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" name="email" required placeholder="Enter your email">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required placeholder="Enter your password">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 15px;">Login</button>
+                </form>
+
+                <p style="text-align: center;">
+                    Don't have an account? <a href="counselor-register.html" style="color: #3498db;">Register here</a>
+                </p>
+            </div>
+
+            <div class="card" style="background-color: #fff3cd; border-left: 4px solid #ffc107;">
+                <h4>Demo Credentials</h4>
+                <p><strong>Email:</strong> counselor@example.com</p>
+                <p><strong>Password:</strong> password123</p>
+                <p style="font-size: 12px; margin-top: 10px;">These are sample credentials for testing purposes.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer style="text-align: center;">
+        <p>&copy; 2026 Anonymous Guidance Counseling System. All rights reserved.</p>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script>
+        const API_URL = window.APP_CONFIG.API_URL;
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_URL}/counselors/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showAlert('Login successful! Redirecting to dashboard...', 'success');
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('counselorId', data.counselor.id);
+                    localStorage.setItem('counselorName', data.counselor.name);
+                    localStorage.setItem('userType', 'counselor');
+                    setTimeout(() => {
+                        window.location.href = 'counselor-dashboard.html';
+                    }, 1500);
+                } else {
+                    showAlert(data.message || 'Login failed', 'error');
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+            }
+        });
+
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('alert');
+            alertDiv.textContent = message;
+            alertDiv.className = `alert alert-${type}`;
+        }
+    </script>
+</body>
+</html>

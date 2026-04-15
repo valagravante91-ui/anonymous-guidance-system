@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Registration - Guidance Counseling</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <nav>
+                <div class="logo">🎓 Guidance Counseling</div>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="student-login.html">Student Login</a></li>
+                    <li><a href="counselor-login.html">Counselor Login</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div style="max-width: 500px; margin: 40px auto;">
+            <div class="card">
+                <div class="card-header">Student Registration</div>
+                
+                <div id="alert" class="alert hidden" style="margin-bottom: 20px;"></div>
+
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="nickname">Nickname (Anonymous)</label>
+                        <input type="text" id="nickname" name="nickname" required minlength="3" placeholder="Choose a unique nickname">
+                        <small>This is how you'll be known in the system. No real names needed.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required minlength="6" placeholder="Enter a strong password">
+                        <small>Minimum 6 characters</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm Password</label>
+                        <input type="password" id="confirmPassword" name="confirmPassword" required minlength="6" placeholder="Confirm your password">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 15px;">Register</button>
+                </form>
+
+                <p style="text-align: center;">
+                    Already have an account? <a href="student-login.html" style="color: #3498db;">Login here</a>
+                </p>
+            </div>
+
+            <div class="card" style="background-color: #f0f8ff;">
+                <h4>Privacy Notice</h4>
+                <p>We take your privacy seriously. Your registration requires only a nickname and password. No personal identification data is collected or stored.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer style="text-align: center;">
+        <p>&copy; 2026 Anonymous Guidance Counseling System. All rights reserved.</p>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script>
+        const API_URL = window.APP_CONFIG.API_URL;
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const nickname = document.getElementById('nickname').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (password !== confirmPassword) {
+                showAlert('Passwords do not match', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/students/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ nickname, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showAlert('Registration successful! Redirecting to dashboard...', 'success');
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('studentId', data.student.id);
+                    localStorage.setItem('nickname', data.student.nickname);
+                    setTimeout(() => {
+                        window.location.href = 'student-dashboard.html';
+                    }, 1500);
+                } else {
+                    showAlert(data.message || 'Registration failed', 'error');
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+            }
+        });
+
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('alert');
+            alertDiv.textContent = message;
+            alertDiv.className = `alert alert-${type}`;
+        }
+    </script>
+</body>
+</html>

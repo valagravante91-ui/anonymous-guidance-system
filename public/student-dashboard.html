@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - Guidance Counseling</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <style>
+        /* Confirmation Modal */
+        #confirmModal {
+            position: fixed;
+            inset: 0;
+            background: rgba(30, 27, 75, 0.35);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            animation: fadeIn 0.2s ease;
+        }
+        #confirmModal.hidden { display: none !important; }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        .modal-box {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 36px 32px;
+            max-width: 460px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(99,102,241,0.2);
+            animation: slideUp 0.25s cubic-bezier(0.4,0,0.2,1);
+        }
+        @keyframes slideUp {
+            from { transform: translateY(24px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+        }
+        .modal-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.1));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            margin: 0 auto 16px;
+        }
+        .modal-title {
+            font-family: 'Clash Display', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e1b4b;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .modal-subtitle {
+            font-size: 14px;
+            color: #4b5563;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .modal-detail {
+            background: #f5f3ff;
+            border: 1px solid rgba(99,102,241,0.15);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+        }
+        .modal-detail p {
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 6px;
+            display: flex;
+            gap: 6px;
+        }
+        .modal-detail p:last-child { margin-bottom: 0; }
+        .modal-detail strong { color: #1e1b4b; min-width: 90px; }
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+        }
+        .modal-actions .btn { flex: 1; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <nav>
+                <div class="logo">🎓 Guidance Counseling</div>
+                <ul>
+                    <li><span id="userGreeting" style="color: #3498db;"></span></li>
+                    <li><a href="#" onclick="logout()">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="dashboard">
+            <div class="sidebar">
+                <h3>Menu</h3>
+                <ul>
+                    <li><a href="#" data-section="bookings" onclick="showSection('bookings', this)" class="active">My Bookings</a></li>
+                    <li><a href="#" data-section="schedule" onclick="showSection('schedule', this)">Book a Session</a></li>
+                    <li><a href="#" data-section="history" onclick="showSection('history', this)">Consultation History</a></li>
+                </ul>
+            </div>
+
+            <div class="main-content">
+                <div id="alert" class="alert hidden" style="margin-bottom: 20px;"></div>
+
+                <!-- My Bookings Section -->
+                <div id="bookings-section" class="section">
+                    <div class="card-header">My Upcoming Bookings</div>
+                    <div id="bookingsList" style="margin-top: 20px;">
+                        <p class="loading">Loading bookings...</p>
+                    </div>
+                </div>
+
+                <!-- Book a Session Section -->
+                <div id="schedule-section" class="section hidden">
+                    <div class="card-header">Book a Counseling Session</div>
+                    <div style="margin-top: 20px;">
+                        <div id="schedulesList">
+                            <p class="loading">Loading schedules...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Consultation History Section -->
+                <div id="history-section" class="section hidden">
+                    <div class="card-header">Consultation History</div>
+                    <div id="historyList" style="margin-top: 20px;">
+                        <p class="loading">Loading history...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="hidden">
+        <div class="modal-box">
+            <div class="modal-icon">📅</div>
+            <div class="modal-title">Confirm Your Booking</div>
+            <div class="modal-subtitle">Are you sure you want to book this slot?</div>
+            <div class="modal-detail">
+                <p><strong>Counselor:</strong> <span id="modalCounselor"></span></p>
+                <p><strong>Date:</strong> <span id="modalDate"></span></p>
+                <p><strong>Day:</strong> <span id="modalDay"></span></p>
+                <p><strong>Time:</strong> <span id="modalTime"></span></p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmBooking()">✓ Confirm Booking</button>
+            </div>
+        </div>
+    </div>
+
+    <footer style="text-align: center;">
+        <p>&copy; 2026 Anonymous Guidance Counseling System. All rights reserved.</p>
+    </footer>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="js/config.js"></script>
+    <script>
+        const API_URL = window.APP_CONFIG.API_URL;
+        const token = localStorage.getItem('token');
+        const nickname = localStorage.getItem('nickname');
+        let selectedSchedule = null;
+
+        if (!token) {
+            window.location.href = 'student-login.html';
+        }
+
+        document.getElementById('userGreeting').textContent = `Welcome, ${nickname}`;
+
+        // Socket.io for notifications
+        const socket = io(window.APP_CONFIG.SOCKET_URL);
+
+        socket.on('receiveNotification', (data) => {
+            showAlert(`Reminder: Your consultation with ${data.counselor} is in 5 minutes!`, 'info');
+        });
+
+        function showSection(section, clickedLink = null) {
+            document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+            document.getElementById(section + '-section').classList.remove('hidden');
+
+            document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+            if (clickedLink) {
+                clickedLink.classList.add('active');
+            } else {
+                const matchingLink = document.querySelector(`.sidebar a[data-section="${section}"]`);
+                if (matchingLink) matchingLink.classList.add('active');
+            }
+
+            if (section === 'bookings') loadBookings();
+            else if (section === 'schedule') loadSchedules();
+            else if (section === 'history') loadHistory();
+        }
+
+        async function loadBookings() {
+            try {
+                const response = await fetch(`${API_URL}/students/bookings`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const bookings = await response.json();
+                const bookingsList = document.getElementById('bookingsList');
+
+                if (bookings.length === 0) {
+                    bookingsList.innerHTML = '<p>No upcoming bookings. <a href="#" onclick="showSection(\'schedule\')">Book a session</a></p>';
+                    return;
+                }
+
+                let html = '<table><thead><tr><th>Counselor</th><th>Date & Time</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+                bookings.forEach(booking => {
+                    const date = new Date(booking.bookingDate).toLocaleDateString();
+                    const status = booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
+                    html += `<tr>
+                        <td>${booking.counselorId.name}</td>
+                        <td>${date} ${booking.startTime}</td>
+                        <td>${status}</td>
+                        <td>
+                            ${(booking.status === 'scheduled' || booking.status === 'ongoing') ? `<button class="btn btn-primary" onclick="joinCall('${booking._id}')">Join Call</button>` : ''}
+                            ${booking.status === 'scheduled' ? `<button class="btn btn-danger" onclick="cancelBooking('${booking._id}')">Cancel</button>` : ''}
+                        </td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                bookingsList.innerHTML = html;
+            } catch (error) {
+                showAlert('Error loading bookings: ' + error.message, 'error');
+            }
+        }
+
+        async function loadSchedules() {
+            try {
+                const response = await fetch(`${API_URL}/schedules/active`);
+                const schedules = await response.json();
+
+                const schedulesList = document.getElementById('schedulesList');
+                let html = '';
+
+                schedules.forEach(schedule => {
+                    const scheduleDate = schedule.scheduleDate
+                        ? new Date(schedule.scheduleDate).toISOString().split('T')[0]
+                        : '';
+                    html += `<div class="card">
+                        <h4>${schedule.counselorId.name}</h4>
+                        <p><strong>Specialization:</strong> ${schedule.counselorId.specialization}</p>
+                        <p><strong>Date:</strong> ${scheduleDate || 'Choose based on weekday availability'}</p>
+                        <p><strong>Available:</strong> ${schedule.dayOfWeek} ${schedule.startTime} - ${schedule.endTime}</p>
+                        <button class="btn btn-success" onclick="bookSession('${schedule.counselorId._id}', '${schedule._id}', '${schedule.dayOfWeek}', '${schedule.startTime}', '${schedule.endTime}', '${schedule.counselorId.name}', '${scheduleDate}')">Book This Slot</button>
+                    </div>`;
+                });
+
+                schedulesList.innerHTML = html || '<p>No available schedules at the moment.</p>';
+            } catch (error) {
+                showAlert('Error loading schedules: ' + error.message, 'error');
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch(`${API_URL}/students/bookings`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const bookings = await response.json();
+                const completedBookings = bookings.filter(b => b.status === 'completed');
+
+                const historyList = document.getElementById('historyList');
+
+                if (completedBookings.length === 0) {
+                    historyList.innerHTML = '<p>No consultation history yet.</p>';
+                    return;
+                }
+
+                let html = '<table><thead><tr><th>Counselor</th><th>Date</th><th>Notes</th></tr></thead><tbody>';
+                completedBookings.forEach(booking => {
+                    const date = new Date(booking.bookingDate).toLocaleDateString();
+                    html += `<tr>
+                        <td>${booking.counselorId.name}</td>
+                        <td>${date}</td>
+                        <td>${booking.sessionNotes || 'No notes'}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                historyList.innerHTML = html;
+            } catch (error) {
+                showAlert('Error loading history: ' + error.message, 'error');
+            }
+        }
+
+        function bookSession(counselorId, scheduleId, dayOfWeek, startTime, endTime, counselorName, scheduleDate = '') {
+            selectedSchedule = { counselorId, scheduleId, dayOfWeek, startTime, endTime, counselorName, scheduleDate };
+
+            // Populate modal details
+            document.getElementById('modalCounselor').textContent = counselorName;
+            document.getElementById('modalDate').textContent    = scheduleDate || 'Next available ' + dayOfWeek;
+            document.getElementById('modalDay').textContent     = dayOfWeek;
+            document.getElementById('modalTime').textContent    = `${startTime} – ${endTime}`;
+
+            // Show modal
+            document.getElementById('confirmModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('confirmModal').classList.add('hidden');
+            selectedSchedule = null;
+        }
+
+        // Close modal when clicking the backdrop
+        document.getElementById('confirmModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        async function confirmBooking() {
+            if (!selectedSchedule) return;
+
+            // Use the schedule's fixed date, or fall back to today if open-ended
+            let bookingDate = selectedSchedule.scheduleDate;
+            if (!bookingDate) {
+                // Find next occurrence of the dayOfWeek from today
+                const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                const target = days.indexOf(selectedSchedule.dayOfWeek);
+                const today = new Date();
+                const diff = (target - today.getDay() + 7) % 7 || 7;
+                const next = new Date(today);
+                next.setDate(today.getDate() + diff);
+                bookingDate = next.toISOString().split('T')[0];
+            }
+
+            // Disable confirm button to prevent double-click
+            const confirmBtn = document.querySelector('#confirmModal .btn-primary');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Booking...';
+
+            try {
+                const response = await fetch(`${API_URL}/bookings/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        counselorId: selectedSchedule.counselorId,
+                        scheduleId:  selectedSchedule.scheduleId,
+                        bookingDate,
+                        startTime:   selectedSchedule.startTime,
+                        endTime:     selectedSchedule.endTime
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    closeModal();
+                    showAlert('Session booked successfully!', 'success');
+                    showSection('bookings');
+                } else {
+                    showAlert(data.message || 'Booking failed', 'error');
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = '✓ Confirm Booking';
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = '✓ Confirm Booking';
+            }
+        }
+
+        async function cancelBooking(bookingId) {
+            if (confirm('Are you sure you want to cancel this booking?')) {
+                try {
+                    const response = await fetch(`${API_URL}/bookings/cancel`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ bookingId })
+                    });
+
+                    if (response.ok) {
+                        showAlert('Booking cancelled', 'success');
+                        loadBookings();
+                    } else {
+                        showAlert('Failed to cancel booking', 'error');
+                    }
+                } catch (error) {
+                    showAlert('Error: ' + error.message, 'error');
+                }
+            }
+        }
+
+        function joinCall(bookingId) {
+            window.location.href = `call-session.html?bookingId=${bookingId}`;
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('alert');
+            alertDiv.textContent = message;
+            alertDiv.className = `alert alert-${type}`;
+        }
+
+
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('studentId');
+            localStorage.removeItem('nickname');
+            window.location.href = 'index.html';
+        }
+
+        // Load bookings on page load
+        loadBookings();
+    </script>
+</body>
+</html>
