@@ -88,7 +88,9 @@ exports.getAllActiveSchedules = async (req, res) => {
         const activeBookings = await Booking.find({ status: { $in: ['scheduled', 'ongoing'] } });
         const bookedScheduleIds = activeBookings.map(b => b.scheduleId.toString());
 
-        const availableSchedules = schedules.filter(s => !bookedScheduleIds.includes(s._id.toString()));
+        const availableSchedules = schedules.filter(s => 
+            s.counselorId !== null && !bookedScheduleIds.includes(s._id.toString())
+        );
 
         res.json(availableSchedules);
     } catch (error) {

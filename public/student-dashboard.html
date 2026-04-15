@@ -217,6 +217,9 @@
 
                 let html = '<table><thead><tr><th>Counselor</th><th>Date & Time</th><th>Status</th><th>Action</th></tr></thead><tbody>';
                 bookings.forEach(booking => {
+                    // Skip if counselor data is missing
+                    if (!booking.counselorId) return;
+
                     const date = new Date(booking.bookingDate).toLocaleDateString();
                     const status = booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
                     html += `<tr>
@@ -245,6 +248,9 @@
                 let html = '';
 
                 schedules.forEach(schedule => {
+                    // Skip if counselor data is missing
+                    if (!schedule.counselorId) return;
+
                     const scheduleDate = schedule.scheduleDate
                         ? new Date(schedule.scheduleDate).toISOString().split('T')[0]
                         : '';
@@ -281,6 +287,9 @@
 
                 let html = '<table><thead><tr><th>Counselor</th><th>Date</th><th>Notes</th></tr></thead><tbody>';
                 completedBookings.forEach(booking => {
+                    // Skip if counselor data is missing
+                    if (!booking.counselorId) return;
+
                     const date = new Date(booking.bookingDate).toLocaleDateString();
                     html += `<tr>
                         <td>${booking.counselorId.name}</td>

@@ -95,7 +95,11 @@ exports.getStudentBookings = async (req, res) => {
         const bookings = await Booking.find({ studentId: req.studentId })
             .populate('counselorId', 'name specialization')
             .sort({ createdAt: -1 });
-        res.json(bookings);
+        
+        // Filter out any bookings where the counselor might have been deleted (orphaned records)
+        const validBookings = bookings.filter(b => b.counselorId !== null);
+            
+        res.json(validBookings);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching bookings', error: error.message });
     }
